@@ -19,13 +19,12 @@ let statusMessage = '🔴 Idle';
 
 bot.start((ctx) => {
   ctx.reply(
-    '🤖 *K6 Stress Test Bot*\n\n' +
+    '🤖 K6 Stress Test Bot\n\n' +
     'Commands:\n' +
     '/start_test - Start looping stress test\n' +
     '/stop - Stop the stress test\n' +
     '/status - Check current status\n' +
-    '/help - Show this help',
-    { parse_mode: 'Markdown' }
+    '/help - Show this help'
   );
 });
 
