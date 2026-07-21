@@ -1,0 +1,12 @@
+{
+  "name": "k6-stress-bot",
+  "version": "1.0.0",
+  "description": "Telegram bot to run k6 stress tests",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "telegraf": "^4.16.3"
+  }
+}
