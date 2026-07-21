@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: k6-stress-bot
+    env: docker
+    plan: free
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: TARGET_URL
+        value: https://schoolwebapp.com/
