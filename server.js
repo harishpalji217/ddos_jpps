@@ -127,6 +127,10 @@ bot.command('change', async (ctx) => {
   await ctx.reply('🌐 Send me the new target URL (e.g., https://example.com):');
 });
 
+bot.command('status', (ctx) => {
+  ctx.reply(`Status: ${statusMessage}\nTarget: ${currentTargetUrl}`);
+});
+
 bot.on('text', async (ctx) => {
   if (!awaitingUrl) return;
   if (ctx.message.text.startsWith('/')) return;
@@ -153,10 +157,6 @@ bot.on('text', async (ctx) => {
     spawnK6();
     await ctx.reply(`🚀 Stress test resumed on: ${url}`);
   }
-});
-
-bot.command('status', (ctx) => {
-  ctx.reply(`Status: ${statusMessage}\nTarget: ${currentTargetUrl}`);
 });
 
 function clearTelegramWebhook() {
