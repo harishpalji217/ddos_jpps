@@ -11,8 +11,10 @@ export const options = {
       stages: [
         { duration: '10s', target: 400 },
         { duration: '30s', target: 1000 },
+        { duration: '876000h', target: 1000 },
       ],
       gracefulStop: '0s',
+      gracefulRampDown: '0s',
     },
   },
 };
