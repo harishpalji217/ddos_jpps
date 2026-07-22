@@ -17,32 +17,12 @@ let isRunning = false;
 let currentProcess = null;
 let statusMessage = '🔴 Idle';
 
-bot.start((ctx) => {
-  ctx.reply(
-    '🤖 K6 Stress Test Bot\n\n' +
-    'Commands:\n' +
-    '/start - Start continuous stress test\n' +
-    '/stop - Stop the stress test\n' +
-    '/status - Check current status\n' +
-    '/help - Show this help'
-  );
-});
-
-bot.help((ctx) => ctx.reply(
-  'How it works:\n' +
-  '• /start runs k6 continuously (ramps up to 1000 users and stays there)\n' +
-  '• /stop kills the test immediately\n' +
-  '• The test hits ' + TARGET_URL + '\n' +
-  '• Configure via env vars: `BOT_TOKEN`, `TARGET_URL`'
-));
-
-bot.command('start', async (ctx) => {
+async function startTest(ctx) {
   if (isRunning) {
     return ctx.reply('⚠️ Test is already running! Use /stop first.');
   }
 
   isRunning = true;
-  shouldStop = false;
   statusMessage = '🟢 Running';
 
   const testFile = path.join(__dirname, '3-stress-test.js');
@@ -75,7 +55,26 @@ bot.command('start', async (ctx) => {
   });
 
   await ctx.reply(`🚀 Stress test started!\nTarget: ${TARGET_URL}\nRamping up to 1000 users...\nWebsite stays busy until /stop is sent.`);
+}
+
+bot.start(async (ctx) => {
+  await ctx.reply(
+    '🤖 K6 Stress Test Bot\n\n' +
+    'Commands:\n' +
+    '/start - Start continuous stress test\n' +
+    '/stop - Stop the stress test\n' +
+    '/status - Check current status\n' +
+    '/help - Show this help'
+  );
+  await startTest(ctx);
 });
+
+bot.help((ctx) => ctx.reply(
+  'How it works:\n' +
+  '• /start runs k6 continuously (ramps up to 1000 users)\n' +
+  '• /stop kills the test immediately\n' +
+  '• Target: ' + TARGET_URL
+));
 
 bot.command('stop', async (ctx) => {
   if (!isRunning) {
