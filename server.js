@@ -146,8 +146,8 @@ function shutdown(signal) {
     try { currentProcess.kill('SIGKILL'); } catch (e) {}
     currentProcess = null;
   }
-  bot.stop(signal).finally(() => process.exit(0));
-  setTimeout(() => process.exit(0), 2000);
+  try { bot.stop(signal); } catch (e) {}
+  setTimeout(() => process.exit(0), 1000);
 }
 
 process.once('SIGINT', () => shutdown('SIGINT'));
