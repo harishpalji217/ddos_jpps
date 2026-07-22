@@ -141,11 +141,13 @@ startBot().catch(err => console.error('Failed to start bot:', err.message));
 
 function shutdown(signal) {
   console.log(`Received ${signal}, shutting down...`);
+  isRunning = false;
   if (currentProcess) {
     try { currentProcess.kill('SIGKILL'); } catch (e) {}
     currentProcess = null;
   }
-  bot.stop(signal);
+  bot.stop(signal).finally(() => process.exit(0));
+  setTimeout(() => process.exit(0), 2000);
 }
 
 process.once('SIGINT', () => shutdown('SIGINT'));
