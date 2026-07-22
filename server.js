@@ -23,17 +23,19 @@ function spawnK6() {
   const testFile = path.join(__dirname, '3-stress-test.js');
   const env = { ...process.env, TARGET_URL: currentTargetUrl };
 
-  currentProcess = spawn('k6', ['run', testFile], { env, stdio: 'pipe' });
+  const proc = spawn('k6', ['run', testFile], { env, stdio: 'pipe' });
+  currentProcess = proc;
 
-  currentProcess.stdout.on('data', (data) => {
+  proc.stdout.on('data', (data) => {
     process.stdout.write(`[k6] ${data}`);
   });
 
-  currentProcess.stderr.on('data', (data) => {
+  proc.stderr.on('data', (data) => {
     process.stderr.write(`[k6] ${data}`);
   });
 
-  currentProcess.on('close', (code) => {
+  proc.on('close', (code) => {
+    if (currentProcess !== proc) return;
     currentProcess = null;
     if (isRunning) {
       isRunning = false;
@@ -44,7 +46,8 @@ function spawnK6() {
     }
   });
 
-  currentProcess.on('error', (err) => {
+  proc.on('error', (err) => {
+    if (currentProcess !== proc) return;
     currentProcess = null;
     isRunning = false;
     statusMessage = '🔴 Idle';
