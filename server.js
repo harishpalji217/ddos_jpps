@@ -118,27 +118,38 @@ function clearTelegramWebhook() {
 }
 
 async function startBot() {
-  await clearTelegramWebhook();
-  try {
-    await bot.launch();
-    console.log('🤖 Bot is running!');
-  } catch (err) {
-    if (err.response?.error_code === 409) {
-      console.log('⚠️ 409 conflict, retrying...');
-      await clearTelegramWebhook();
-      await new Promise(r => setTimeout(r, 2000));
+  for (let i = 0; i < 10; i++) {
+    await clearTelegramWebhook();
+    try {
       await bot.launch();
       console.log('🤖 Bot is running!');
-    } else {
-      throw err;
+      return;
+    } catch (err) {
+      if (err.response?.error_code === 409) {
+        const wait = 2 ** i * 1000;
+        console.log(`⚠️ 409 conflict (attempt ${i + 1}), waiting ${wait}ms...`);
+        await new Promise(r => setTimeout(r, wait));
+      } else {
+        throw err;
+      }
     }
   }
+  throw new Error('Failed to start bot after 10 attempts');
 }
 
 startBot().catch(err => console.error('Failed to start bot:', err.message));
 
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+function shutdown(signal) {
+  console.log(`Received ${signal}, shutting down...`);
+  if (currentProcess) {
+    try { currentProcess.kill('SIGKILL'); } catch (e) {}
+    currentProcess = null;
+  }
+  bot.stop(signal);
+}
+
+process.once('SIGINT', () => shutdown('SIGINT'));
+process.once('SIGTERM', () => shutdown('SIGTERM'));
 
 const PORT = process.env.PORT || 3000;
 require('http').createServer((req, res) => {
