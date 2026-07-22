@@ -4,7 +4,9 @@ const path = require('path');
 const https = require('https');
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
-const TARGET_URL = process.env.TARGET_URL || 'https://schoolwebapp.com/';
+let currentTargetUrl = process.env.TARGET_URL || 'https://schoolwebapp.com/';
+let awaitingUrl = false;
+let adminChatId = null;
 
 if (!BOT_TOKEN) {
   console.error('❌ BOT_TOKEN environment variable is required');
@@ -17,16 +19,9 @@ let isRunning = false;
 let currentProcess = null;
 let statusMessage = '🔴 Idle';
 
-async function startTest(ctx) {
-  if (isRunning) {
-    return ctx.reply('⚠️ Test is already running! Use /stop first.');
-  }
-
-  isRunning = true;
-  statusMessage = '🟢 Running';
-
+function spawnK6() {
   const testFile = path.join(__dirname, '3-stress-test.js');
-  const env = { ...process.env, TARGET_URL };
+  const env = { ...process.env, TARGET_URL: currentTargetUrl };
 
   currentProcess = spawn('k6', ['run', testFile], { env, stdio: 'pipe' });
 
@@ -43,7 +38,9 @@ async function startTest(ctx) {
     if (isRunning) {
       isRunning = false;
       statusMessage = '🔴 Idle';
-      ctx.reply(`⚠️ Test stopped unexpectedly (exit code: ${code}). Send /start to resume.`).catch(() => {});
+      if (adminChatId) {
+        bot.telegram.sendMessage(adminChatId, `⚠️ Test stopped unexpectedly (exit code: ${code}). Send /start to resume.`).catch(() => {});
+      }
     }
   });
 
@@ -51,10 +48,24 @@ async function startTest(ctx) {
     currentProcess = null;
     isRunning = false;
     statusMessage = '🔴 Idle';
-    ctx.reply(`❌ Failed to start k6: ${err.message}`).catch(() => {});
+    if (adminChatId) {
+      bot.telegram.sendMessage(adminChatId, `❌ Failed to start k6: ${err.message}`).catch(() => {});
+    }
   });
+}
 
-  await ctx.reply(`🚀 Stress test started!\nTarget: ${TARGET_URL}\nRamping up to 1000 users...\nWebsite stays busy until /stop is sent.`);
+async function startTest(ctx) {
+  if (isRunning) {
+    return ctx.reply('⚠️ Test is already running! Use /stop first.');
+  }
+
+  adminChatId = ctx.chat.id;
+  isRunning = true;
+  statusMessage = '🟢 Running';
+
+  spawnK6();
+
+  await ctx.reply(`🚀 Stress test started!\nTarget: ${currentTargetUrl}\nContinuous load with 200 VUs...\nSend /stop to halt.`);
 }
 
 bot.start(async (ctx) => {
@@ -63,17 +74,21 @@ bot.start(async (ctx) => {
     'Commands:\n' +
     '/start - Start continuous stress test\n' +
     '/stop - Stop the stress test\n' +
+    '/change - Change the target URL\n' +
     '/status - Check current status\n' +
     '/help - Show this help'
   );
+  adminChatId = ctx.chat.id;
   await startTest(ctx);
 });
 
 bot.help((ctx) => ctx.reply(
   'How it works:\n' +
-  '• /start runs k6 continuously (ramps up to 1000 users)\n' +
+  '• /start runs k6 continuously (200 VUs)\n' +
   '• /stop kills the test immediately\n' +
-  '• Target: ' + TARGET_URL
+  '• /change lets you set a new target URL\n' +
+  '• /status shows current state\n' +
+  '• Current target: ' + currentTargetUrl
 ));
 
 bot.command('stop', async (ctx) => {
@@ -103,8 +118,42 @@ bot.command('stop', async (ctx) => {
   } catch (e) {}
 });
 
+bot.command('change', async (ctx) => {
+  adminChatId = ctx.chat.id;
+  awaitingUrl = true;
+  await ctx.reply('🌐 Send me the new target URL (e.g., https://example.com):');
+});
+
+bot.on('text', async (ctx) => {
+  if (!awaitingUrl) return;
+  if (ctx.message.text.startsWith('/')) return;
+
+  let url = ctx.message.text.trim();
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    url = 'https://' + url;
+  }
+
+  try {
+    new URL(url);
+  } catch (e) {
+    return ctx.reply('❌ Invalid URL. Enter a valid URL (e.g., https://example.com).');
+  }
+
+  currentTargetUrl = url;
+  awaitingUrl = false;
+  await ctx.reply(`✅ Target URL changed to: ${url}`);
+
+  if (isRunning) {
+    await ctx.reply('🔄 Restarting stress test with new target...');
+    try { if (currentProcess) currentProcess.kill('SIGKILL'); } catch (e) {}
+    currentProcess = null;
+    spawnK6();
+    await ctx.reply(`🚀 Stress test resumed on: ${url}`);
+  }
+});
+
 bot.command('status', (ctx) => {
-  ctx.reply(`Status: ${statusMessage}`);
+  ctx.reply(`Status: ${statusMessage}\nTarget: ${currentTargetUrl}`);
 });
 
 function clearTelegramWebhook() {
