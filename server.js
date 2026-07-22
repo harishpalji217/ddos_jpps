@@ -28,7 +28,7 @@ async function startTest(ctx) {
   const testFile = path.join(__dirname, '3-stress-test.js');
   const env = { ...process.env, TARGET_URL };
 
-  currentProcess = spawn('k6', ['run', testFile], { env, stdio: 'pipe', shell: true });
+  currentProcess = spawn('k6', ['run', testFile], { env, stdio: 'pipe' });
 
   currentProcess.stdout.on('data', (data) => {
     process.stdout.write(`[k6] ${data}`);
@@ -77,8 +77,8 @@ bot.help((ctx) => ctx.reply(
 ));
 
 bot.command('stop', async (ctx) => {
-  if (!isRunning) {
-    return ctx.reply('⚠️ No test is currently running.');
+  if (!currentProcess && !isRunning) {
+    return await ctx.reply('⚠️ No test is currently running.');
   }
 
   isRunning = false;
@@ -91,16 +91,16 @@ bot.command('stop', async (ctx) => {
       } else {
         currentProcess.kill('SIGTERM');
         setTimeout(() => {
-          if (currentProcess) currentProcess.kill('SIGKILL');
-        }, 5000);
+          try { if (currentProcess) currentProcess.kill('SIGKILL'); } catch (e) {}
+        }, 3000);
       }
-    } catch (e) {
-      // ignore
-    }
+    } catch (e) {}
     currentProcess = null;
   }
 
-  await ctx.reply('⏹️ Stress test stopped. Website is now free.');
+  try {
+    await ctx.reply('⏹️ Stress test stopped. Website is now free.');
+  } catch (e) {}
 });
 
 bot.command('status', (ctx) => {
