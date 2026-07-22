@@ -14,14 +14,13 @@ if (!BOT_TOKEN) {
 const bot = new Telegraf(BOT_TOKEN);
 let isRunning = false;
 let currentProcess = null;
-let shouldStop = false;
 let statusMessage = '🔴 Idle';
 
 bot.start((ctx) => {
   ctx.reply(
     '🤖 K6 Stress Test Bot\n\n' +
     'Commands:\n' +
-    '/start_test - Start looping stress test\n' +
+    '/start - Start continuous stress test\n' +
     '/stop - Stop the stress test\n' +
     '/status - Check current status\n' +
     '/help - Show this help'
@@ -30,76 +29,51 @@ bot.start((ctx) => {
 
 bot.help((ctx) => ctx.reply(
   'How it works:\n' +
-  '• /start_test runs k6 with `3-stress-test.js` in a loop (repeats forever)\n' +
-  '• /stop kills the current test and stops the loop\n' +
+  '• /start runs k6 continuously (ramps up to 1000 users and stays there)\n' +
+  '• /stop kills the test immediately\n' +
   '• The test hits ' + TARGET_URL + '\n' +
   '• Configure via env vars: `BOT_TOKEN`, `TARGET_URL`'
 ));
 
-function runStressTest() {
-  return new Promise((resolve) => {
-    const testFile = path.join(__dirname, '3-stress-test.js');
-    const env = { ...process.env, TARGET_URL };
-
-    currentProcess = spawn('k6', ['run', testFile], { env, stdio: 'pipe', shell: true });
-
-    currentProcess.stdout.on('data', (data) => {
-      process.stdout.write(`[k6] ${data}`);
-    });
-
-    currentProcess.stderr.on('data', (data) => {
-      process.stderr.write(`[k6] ${data}`);
-    });
-
-    currentProcess.on('close', (code) => {
-      currentProcess = null;
-      resolve(code);
-    });
-
-    currentProcess.on('error', (err) => {
-      currentProcess = null;
-      resolve(-1);
-    });
-  });
-}
-
-async function startLoopingTest(ctx) {
-  isRunning = true;
-  shouldStop = false;
-  let iteration = 0;
-
-  await ctx.reply(`🚀 Stress test started!\nTarget: ${TARGET_URL}\nRepeating until /stop is sent.`);
-  statusMessage = '🟢 Running';
-
-  while (!shouldStop) {
-    iteration++;
-    const statusMsg = await ctx.reply(`🔄 Iteration #${iteration} starting...`);
-
-    const exitCode = await runStressTest();
-
-    if (shouldStop) break;
-
-    if (exitCode === 0) {
-      await ctx.telegram.sendMessage(ctx.chat.id, `✅ Iteration #${iteration} complete. Restarting...`);
-    } else {
-      await ctx.telegram.sendMessage(ctx.chat.id, `⚠️ Iteration #${iteration} finished (exit code: ${exitCode}). Restarting...`);
-    }
-  }
-
-  isRunning = false;
-  statusMessage = '🔴 Idle';
-  await ctx.reply('⏹️ Stress test stopped.');
-}
-
-bot.command('start_test', async (ctx) => {
+bot.command('start', async (ctx) => {
   if (isRunning) {
     return ctx.reply('⚠️ Test is already running! Use /stop first.');
   }
-  startLoopingTest(ctx).catch((err) => {
-    console.error('Loop error:', err.message);
+
+  isRunning = true;
+  shouldStop = false;
+  statusMessage = '🟢 Running';
+
+  const testFile = path.join(__dirname, '3-stress-test.js');
+  const env = { ...process.env, TARGET_URL };
+
+  currentProcess = spawn('k6', ['run', testFile], { env, stdio: 'pipe', shell: true });
+
+  currentProcess.stdout.on('data', (data) => {
+    process.stdout.write(`[k6] ${data}`);
+  });
+
+  currentProcess.stderr.on('data', (data) => {
+    process.stderr.write(`[k6] ${data}`);
+  });
+
+  currentProcess.on('close', (code) => {
+    currentProcess = null;
+    if (isRunning) {
+      isRunning = false;
+      statusMessage = '🔴 Idle';
+      ctx.reply(`⚠️ Test stopped unexpectedly (exit code: ${code}). Send /start to resume.`).catch(() => {});
+    }
+  });
+
+  currentProcess.on('error', (err) => {
+    currentProcess = null;
     isRunning = false;
     statusMessage = '🔴 Idle';
+    ctx.reply(`❌ Failed to start k6: ${err.message}`).catch(() => {});
   });
+
+  await ctx.reply(`🚀 Stress test started!\nTarget: ${TARGET_URL}\nRamping up to 1000 users...\nWebsite stays busy until /stop is sent.`);
 });
 
 bot.command('stop', async (ctx) => {
@@ -107,7 +81,8 @@ bot.command('stop', async (ctx) => {
     return ctx.reply('⚠️ No test is currently running.');
   }
 
-  shouldStop = true;
+  isRunning = false;
+  statusMessage = '🔴 Idle';
 
   if (currentProcess) {
     try {
@@ -125,7 +100,7 @@ bot.command('stop', async (ctx) => {
     currentProcess = null;
   }
 
-  await ctx.reply('⏹️ Stopping test...');
+  await ctx.reply('⏹️ Stress test stopped. Website is now free.');
 });
 
 bot.command('status', (ctx) => {
