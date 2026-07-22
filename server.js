@@ -1,6 +1,7 @@
 const { Telegraf } = require('telegraf');
 const { spawn, execSync } = require('child_process');
 const path = require('path');
+const https = require('https');
 
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const TARGET_URL = process.env.TARGET_URL || 'https://schoolwebapp.com/';
@@ -107,14 +108,41 @@ bot.command('status', (ctx) => {
   ctx.reply(`Status: ${statusMessage}`);
 });
 
-bot.launch().then(() => console.log('🤖 Bot is running!'));
+function clearTelegramWebhook() {
+  return new Promise((resolve) => {
+    https.get(`https://api.telegram.org/bot${BOT_TOKEN}/deleteWebhook?drop_pending_updates=true`, (res) => {
+      let data = '';
+      res.on('data', (chunk) => data += chunk);
+      res.on('end', () => resolve());
+    }).on('error', () => resolve());
+  });
+}
+
+async function startBot() {
+  await clearTelegramWebhook();
+  try {
+    await bot.launch();
+    console.log('🤖 Bot is running!');
+  } catch (err) {
+    if (err.response?.error_code === 409) {
+      console.log('⚠️ 409 conflict, retrying...');
+      await clearTelegramWebhook();
+      await new Promise(r => setTimeout(r, 2000));
+      await bot.launch();
+      console.log('🤖 Bot is running!');
+    } else {
+      throw err;
+    }
+  }
+}
+
+startBot().catch(err => console.error('Failed to start bot:', err.message));
 
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
 
-const http = require('http');
 const PORT = process.env.PORT || 3000;
-http.createServer((req, res) => {
+require('http').createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
   res.end(`Status: ${statusMessage}`);
 }).listen(PORT, () => console.log(`🌐 Health server on port ${PORT}`));
