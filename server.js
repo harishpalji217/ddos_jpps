@@ -16,45 +16,58 @@ if (!BOT_TOKEN) {
 
 const bot = new Telegraf(BOT_TOKEN);
 let isRunning = false;
-let currentProcess = null;
+let currentProcesses = [];
 let statusMessage = '🔴 Idle';
 
 function spawnK6() {
   const testFile = path.join(__dirname, '3-stress-test.js');
-  const env = { ...process.env, TARGET_URL: currentTargetUrl, HTTP_PROXY: 'socks5://127.0.0.1:9050', HTTPS_PROXY: 'socks5://127.0.0.1:9050', NO_PROXY: 'localhost,127.0.0.1' };
+  const instances = [
+    { port: 9050, vus: 100 },
+    { port: 9051, vus: 100 },
+  ];
 
-  const proc = spawn('k6', ['run', testFile], { env, stdio: 'pipe' });
-  currentProcess = proc;
+  currentProcesses = [];
 
-  proc.stdout.on('data', (data) => {
-    process.stdout.write(`[k6] ${data}`);
-  });
+  for (const inst of instances) {
+    const env = { ...process.env, TARGET_URL: currentTargetUrl, HTTP_PROXY: `socks5://127.0.0.1:${inst.port}`, HTTPS_PROXY: `socks5://127.0.0.1:${inst.port}`, MAX_VUS: String(inst.vus) };
 
-  proc.stderr.on('data', (data) => {
-    process.stderr.write(`[k6] ${data}`);
-  });
+    const proc = spawn('k6', ['run', testFile], { env, stdio: 'pipe' });
+    currentProcesses.push(proc);
 
-  proc.on('close', (code) => {
-    if (currentProcess !== proc) return;
-    currentProcess = null;
-    if (isRunning) {
-      isRunning = false;
-      statusMessage = '🔴 Idle';
-      if (adminChatId) {
-        bot.telegram.sendMessage(adminChatId, `⚠️ Test stopped unexpectedly (exit code: ${code}). Send /start to resume.`).catch(() => {});
+    proc.stdout.on('data', (data) => {
+      process.stdout.write(`[k6:${inst.port}] ${data}`);
+    });
+
+    proc.stderr.on('data', (data) => {
+      process.stderr.write(`[k6:${inst.port}] ${data}`);
+    });
+
+    proc.on('close', (code) => {
+      const idx = currentProcesses.indexOf(proc);
+      if (idx === -1) return;
+      currentProcesses.splice(idx, 1);
+      if (currentProcesses.length === 0 && isRunning) {
+        isRunning = false;
+        statusMessage = '🔴 Idle';
+        if (adminChatId) {
+          bot.telegram.sendMessage(adminChatId, `⚠️ Test stopped unexpectedly (exit code: ${code}). Send /start to resume.`).catch(() => {});
+        }
       }
-    }
-  });
+    });
 
-  proc.on('error', (err) => {
-    if (currentProcess !== proc) return;
-    currentProcess = null;
-    isRunning = false;
-    statusMessage = '🔴 Idle';
-    if (adminChatId) {
-      bot.telegram.sendMessage(adminChatId, `❌ Failed to start k6: ${err.message}`).catch(() => {});
-    }
-  });
+    proc.on('error', (err) => {
+      const idx = currentProcesses.indexOf(proc);
+      if (idx === -1) return;
+      currentProcesses.splice(idx, 1);
+      if (currentProcesses.length === 0) {
+        isRunning = false;
+        statusMessage = '🔴 Idle';
+        if (adminChatId) {
+          bot.telegram.sendMessage(adminChatId, `❌ Failed to start k6: ${err.message}`).catch(() => {});
+        }
+      }
+    });
+  }
 }
 
 async function startTest(ctx) {
@@ -95,26 +108,28 @@ bot.help((ctx) => ctx.reply(
 ));
 
 bot.command('stop', async (ctx) => {
-  if (!currentProcess && !isRunning) {
+  if (currentProcesses.length === 0 && !isRunning) {
     return await ctx.reply('⚠️ No test is currently running.');
   }
 
   isRunning = false;
   statusMessage = '🔴 Idle';
 
-  if (currentProcess) {
+  for (const proc of currentProcesses) {
     try {
       if (process.platform === 'win32') {
-        spawn('taskkill', ['/pid', currentProcess.pid.toString(), '/f', '/t']);
+        spawn('taskkill', ['/pid', proc.pid.toString(), '/f', '/t']);
       } else {
-        currentProcess.kill('SIGTERM');
-        setTimeout(() => {
-          try { if (currentProcess) currentProcess.kill('SIGKILL'); } catch (e) {}
-        }, 3000);
+        proc.kill('SIGTERM');
       }
     } catch (e) {}
-    currentProcess = null;
   }
+  setTimeout(() => {
+    for (const proc of currentProcesses) {
+      try { proc.kill('SIGKILL'); } catch (e) {}
+    }
+    currentProcesses = [];
+  }, 3000);
 
   try {
     await ctx.reply('⏹️ Stress test stopped. Website is now free.');
@@ -152,8 +167,10 @@ bot.on('text', async (ctx) => {
 
   if (isRunning) {
     await ctx.reply('🔄 Restarting stress test with new target...');
-    try { if (currentProcess) currentProcess.kill('SIGKILL'); } catch (e) {}
-    currentProcess = null;
+    for (const proc of currentProcesses) {
+      try { proc.kill('SIGKILL'); } catch (e) {}
+    }
+    currentProcesses = [];
     spawnK6();
     await ctx.reply(`🚀 Stress test resumed on: ${url}`);
   }
@@ -194,10 +211,10 @@ startBot().catch(err => console.error('Failed to start bot:', err.message));
 function shutdown(signal) {
   console.log(`Received ${signal}, shutting down...`);
   isRunning = false;
-  if (currentProcess) {
-    try { currentProcess.kill('SIGKILL'); } catch (e) {}
-    currentProcess = null;
+  for (const proc of currentProcesses) {
+    try { proc.kill('SIGKILL'); } catch (e) {}
   }
+  currentProcesses = [];
   try { bot.stop(signal); } catch (e) {}
   setTimeout(() => process.exit(0), 1000);
 }
