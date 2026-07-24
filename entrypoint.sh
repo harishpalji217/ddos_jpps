@@ -18,10 +18,6 @@ for i in $(seq 1 60); do
   if [ "$r" = ok ]; then
     break
   fi
-  r2=$(timeout 2 bash -c 'echo > /dev/tcp/127.0.0.1/9051' 2>/dev/null && echo ok)
-  if [ "$r" = ok ]; then
-    break
-  fi
   sleep 2
 done
 
