@@ -21,7 +21,7 @@ let statusMessage = '🔴 Idle';
 
 function spawnK6Instance(port, vus) {
   const testFile = path.join(__dirname, '3-stress-test.js');
-  const env = { ...process.env, TARGET_URL: currentTargetUrl, MAX_VUS: String(vus) };
+  const env = { ...process.env, TARGET_URL: currentTargetUrl, HTTP_PROXY: `socks5://127.0.0.1:${port}`, HTTPS_PROXY: `socks5://127.0.0.1:${port}`, MAX_VUS: String(vus) };
 
   const proc = spawn('k6', ['run', testFile], { env, stdio: 'pipe' });
   currentProcesses.push(proc);
@@ -63,8 +63,8 @@ function spawnK6() {
   currentProcesses = [];
 
   const instances = [
-    { port: 9050, vus: 150 },
-    { port: 9051, vus: 150 },
+    { port: 9050, vus: 100 },
+    { port: 9051, vus: 100 },
   ];
 
   for (const inst of instances) {
@@ -83,7 +83,7 @@ async function startTest(ctx) {
 
   spawnK6();
 
-  await ctx.reply(`🚀 Stress test started!\nTarget: ${currentTargetUrl}\nContinuous load with 300 VUs...\nSend /stop to halt.`);
+  await ctx.reply(`🚀 Stress test started!\nTarget: ${currentTargetUrl}\nContinuous load with 200 VUs...\nSend /stop to halt.`);
 }
 
 bot.start(async (ctx) => {
@@ -102,7 +102,7 @@ bot.start(async (ctx) => {
 
 bot.help((ctx) => ctx.reply(
   'How it works:\n' +
-  '• /start runs k6 continuously (300 VUs)\n' +
+  '• /start runs k6 continuously (200 VUs)\n' +
   '• /stop kills the test immediately\n' +
   '• /change lets you set a new target URL\n' +
   '• /status shows current state\n' +

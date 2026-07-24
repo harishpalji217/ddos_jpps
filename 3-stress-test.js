@@ -21,10 +21,10 @@ export const options = {
 
 export default function () {
   http.batch([
-    ['GET', TARGET, null, { timeout: '3s' }],
-    ['GET', TARGET, null, { timeout: '3s' }],
-    ['GET', TARGET, null, { timeout: '3s' }],
-    ['GET', TARGET, null, { timeout: '3s' }],
-    ['GET', TARGET, null, { timeout: '3s' }],
+    ['GET', TARGET, null, { timeout: '60s' }],
+    ['GET', TARGET, null, { timeout: '60s' }],
+    ['GET', TARGET, null, { timeout: '60s' }],
+    ['GET', TARGET, null, { timeout: '60s' }],
+    ['GET', TARGET, null, { timeout: '60s' }],
   ]);
 }
