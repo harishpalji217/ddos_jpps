@@ -21,7 +21,7 @@ let statusMessage = '🔴 Idle';
 
 function spawnK6Instance(port, vus) {
   const testFile = path.join(__dirname, '3-stress-test.js');
-  const env = { ...process.env, TARGET_URL: currentTargetUrl, HTTP_PROXY: `socks5://127.0.0.1:${port}`, HTTPS_PROXY: `socks5://127.0.0.1:${port}`, MAX_VUS: String(vus) };
+  const env = { ...process.env, TARGET_URL: currentTargetUrl, MAX_VUS: String(vus) };
 
   const proc = spawn('k6', ['run', testFile], { env, stdio: 'pipe' });
   currentProcesses.push(proc);
