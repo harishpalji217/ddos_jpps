@@ -19,5 +19,11 @@ export const options = {
 };
 
 export default function () {
-  http.get(TARGET, { timeout: '10s' });
+  http.batch([
+    ['GET', TARGET, null, { timeout: '3s' }],
+    ['GET', TARGET, null, { timeout: '3s' }],
+    ['GET', TARGET, null, { timeout: '3s' }],
+    ['GET', TARGET, null, { timeout: '3s' }],
+    ['GET', TARGET, null, { timeout: '3s' }],
+  ]);
 }
