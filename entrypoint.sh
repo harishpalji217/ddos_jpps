@@ -1,8 +1,17 @@
 #!/bin/bash
 
+cat > /tmp/torrc << 'EOF'
+SocksPort 127.0.0.1:9050
+MaxClientCircuitsPending 4096
+LearnCircuitBuildTimeout 0
+CircuitBuildTimeout 5
+NumEntryGuards 10
+NumDirectoryGuards 10
+EOF
+
 (
   while true; do
-    tor
+    tor -f /tmp/torrc
     sleep 2
   done
 ) &
