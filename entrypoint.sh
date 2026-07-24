@@ -21,4 +21,7 @@ for i in $(seq 1 60); do
   sleep 2
 done
 
+# Wait for Tor to fully bootstrap (get exit nodes)
+sleep 30
+
 exec node server.js
