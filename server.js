@@ -19,54 +19,56 @@ let isRunning = false;
 let currentProcesses = [];
 let statusMessage = '🔴 Idle';
 
-function spawnK6() {
+function spawnK6Instance(port, vus) {
   const testFile = path.join(__dirname, '3-stress-test.js');
-  const instances = [
-    { port: 9050, vus: 100 },
-    { port: 9051, vus: 100 },
-  ];
+  const env = { ...process.env, TARGET_URL: currentTargetUrl, HTTP_PROXY: `socks5://127.0.0.1:${port}`, HTTPS_PROXY: `socks5://127.0.0.1:${port}`, MAX_VUS: String(vus) };
 
+  const proc = spawn('k6', ['run', testFile], { env, stdio: 'pipe' });
+  currentProcesses.push(proc);
+
+  proc.stdout.on('data', (data) => {
+    process.stdout.write(`[k6:${port}] ${data}`);
+  });
+
+  proc.stderr.on('data', (data) => {
+    process.stderr.write(`[k6:${port}] ${data}`);
+  });
+
+  proc.on('close', (code) => {
+    const idx = currentProcesses.indexOf(proc);
+    if (idx === -1) return;
+    currentProcesses.splice(idx, 1);
+    if (isRunning) {
+      spawnK6Instance(port, vus);
+    } else if (currentProcesses.length === 0) {
+      statusMessage = '🔴 Idle';
+    }
+  });
+
+  proc.on('error', (err) => {
+    const idx = currentProcesses.indexOf(proc);
+    if (idx === -1) return;
+    currentProcesses.splice(idx, 1);
+    if (isRunning) {
+      spawnK6Instance(port, vus);
+    } else if (currentProcesses.length === 0) {
+      statusMessage = '🔴 Idle';
+    }
+  });
+
+  return proc;
+}
+
+function spawnK6() {
   currentProcesses = [];
 
+  const instances = [
+    { port: 9050, vus: 150 },
+    { port: 9051, vus: 150 },
+  ];
+
   for (const inst of instances) {
-    const env = { ...process.env, TARGET_URL: currentTargetUrl, HTTP_PROXY: `socks5://127.0.0.1:${inst.port}`, HTTPS_PROXY: `socks5://127.0.0.1:${inst.port}`, MAX_VUS: String(inst.vus) };
-
-    const proc = spawn('k6', ['run', testFile], { env, stdio: 'pipe' });
-    currentProcesses.push(proc);
-
-    proc.stdout.on('data', (data) => {
-      process.stdout.write(`[k6:${inst.port}] ${data}`);
-    });
-
-    proc.stderr.on('data', (data) => {
-      process.stderr.write(`[k6:${inst.port}] ${data}`);
-    });
-
-    proc.on('close', (code) => {
-      const idx = currentProcesses.indexOf(proc);
-      if (idx === -1) return;
-      currentProcesses.splice(idx, 1);
-      if (currentProcesses.length === 0 && isRunning) {
-        isRunning = false;
-        statusMessage = '🔴 Idle';
-        if (adminChatId) {
-          bot.telegram.sendMessage(adminChatId, `⚠️ Test stopped unexpectedly (exit code: ${code}). Send /start to resume.`).catch(() => {});
-        }
-      }
-    });
-
-    proc.on('error', (err) => {
-      const idx = currentProcesses.indexOf(proc);
-      if (idx === -1) return;
-      currentProcesses.splice(idx, 1);
-      if (currentProcesses.length === 0) {
-        isRunning = false;
-        statusMessage = '🔴 Idle';
-        if (adminChatId) {
-          bot.telegram.sendMessage(adminChatId, `❌ Failed to start k6: ${err.message}`).catch(() => {});
-        }
-      }
-    });
+    spawnK6Instance(inst.port, inst.vus);
   }
 }
 
@@ -81,7 +83,7 @@ async function startTest(ctx) {
 
   spawnK6();
 
-  await ctx.reply(`🚀 Stress test started!\nTarget: ${currentTargetUrl}\nContinuous load with 200 VUs...\nSend /stop to halt.`);
+  await ctx.reply(`🚀 Stress test started!\nTarget: ${currentTargetUrl}\nContinuous load with 300 VUs...\nSend /stop to halt.`);
 }
 
 bot.start(async (ctx) => {
@@ -100,7 +102,7 @@ bot.start(async (ctx) => {
 
 bot.help((ctx) => ctx.reply(
   'How it works:\n' +
-  '• /start runs k6 continuously (200 VUs)\n' +
+  '• /start runs k6 continuously (300 VUs)\n' +
   '• /stop kills the test immediately\n' +
   '• /change lets you set a new target URL\n' +
   '• /status shows current state\n' +
