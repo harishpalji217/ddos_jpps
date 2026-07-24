@@ -63,8 +63,7 @@ function spawnK6() {
   currentProcesses = [];
 
   const instances = [
-    { port: 9050, vus: 100 },
-    { port: 9051, vus: 100 },
+    { port: 9050, vus: 200 },
   ];
 
   for (const inst of instances) {
