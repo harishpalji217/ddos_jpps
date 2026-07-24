@@ -2,7 +2,7 @@
 
 cat > /tmp/torrc << 'EOF'
 SocksPort 127.0.0.1:9050
-MaxClientCircuitsPending 4096
+MaxClientCircuitsPending 1024
 LearnCircuitBuildTimeout 0
 CircuitBuildTimeout 5
 NumEntryGuards 10
@@ -12,7 +12,7 @@ EOF
 cat > /tmp/torrc2 << 'EOF'
 SocksPort 127.0.0.1:9051
 DataDirectory /tmp/tor2
-MaxClientCircuitsPending 4096
+MaxClientCircuitsPending 1024
 LearnCircuitBuildTimeout 0
 CircuitBuildTimeout 5
 NumEntryGuards 10
